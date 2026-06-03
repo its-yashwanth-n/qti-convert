@@ -67,7 +67,7 @@ def main(args):
             else:
                 outfile = "output.docx"
             logger.info("Writing DOCX to '" + outfile + "'...")
-            formats.docx.write_file(qti_resource, outfile)
+            formats.docx.write_file(qti_resource, outfile, input_path.parent) # type: ignore
 
         elif args.format.lower() == "gradescope":
             if args.output and args.output.lower().endswith(".docx"):

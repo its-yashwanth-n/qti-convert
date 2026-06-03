@@ -7,6 +7,15 @@ import hashlib
 import config
 from qti_parser import question_type
 
+
+def _parse_image_href(raw_href):
+    """Strip IMS base prefix and detect whether the href is an external URL."""
+    href = re.sub(r"\?.+$", "", raw_href)
+    href = href.replace(config.img_href_ims_base, "").replace(config.img_href_ims_base_dollar, "")
+    is_external = href.startswith("http://") or href.startswith("https://")
+    return href, is_external
+
+
 def get_question(xml_item):
     """ Get question, metadata and answers/options """
     xml_item_metadata = xml_item.find("{http://www.imsglobal.org/xsd/ims_qtiasiv1p2}itemmetadata/{http://www.imsglobal.org/xsd/ims_qtiasiv1p2}qtimetadata")
@@ -20,30 +29,18 @@ def get_question(xml_item):
 
     image = []
 
-    # Try and find images in text to separate them
-    if this_question['text'].lower().find("<p>.*<img"):
-        for match in re.finditer('<p>.*<img.+src=\"([^\"]+)\".*>.*</p>', this_question['text'], re.DOTALL):
-            this_href = re.sub(r"\?.+$", "", match.group(1)).replace(config.img_href_ims_base, "")
+    if this_question['text'] and '<img' in this_question['text'].lower():
+        # Extract every img src regardless of surrounding markup
+        for match in re.finditer(r'<img[^>]+src="([^"]+)"[^>]*>', this_question['text'], re.DOTALL | re.IGNORECASE):
+            href, is_external = _parse_image_href(match.group(1))
             image.append({
-                'id': str(hashlib.md5(this_href.encode()).hexdigest()),
-                'href': this_href
+                'id': str(hashlib.md5(href.encode()).hexdigest()),
+                'href': href,
+                'is_external': is_external
             })
-        p = re.compile('<p>.*<img.+src=\"([^\"]+)\".*>.*</p>')
-        subn_tuple = p.subn('', this_question['text'])
-        if subn_tuple[1] > 0:
-            this_question['text'] = subn_tuple[0]
-
-    elif this_question['text'].lower().find("<img"):
-        for match in re.finditer('<img.+src=\"([^\"]+)\".*>', this_question['text'], re.DOTALL):
-            this_href = re.sub(r"\?.+$", "", match.group(1)).replace(config.img_href_ims_base, "")
-            image.append({
-                'id': str(hashlib.md5(this_href.encode()).hexdigest()),
-                'href': this_href
-            })
-        p = re.compile('<img.+src=\"([^\"]+)\".*>')
-        subn_tuple = p.subn('', this_question['text'])
-        if subn_tuple[1] > 0:
-            this_question['text'] = subn_tuple[0]
+        # Remove <p> blocks whose only content is an img, then strip any remaining img tags
+        this_question['text'] = re.sub(r'<p>\s*<img[^>]*>\s*</p>', '', this_question['text'], flags=re.DOTALL | re.IGNORECASE)
+        this_question['text'] = re.sub(r'<img[^>]*>', '', this_question['text'], flags=re.DOTALL | re.IGNORECASE)
 
     if image:
         this_question['image'] = image

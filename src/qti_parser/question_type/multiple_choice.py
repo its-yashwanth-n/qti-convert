@@ -28,9 +28,13 @@ def get_answers(xml):
             
             if this_answer['text'].lower().find("<img.*"):
                 for match in re.finditer('^<img src="([^"]+)".*>', this_answer['text'], re.DOTALL):
+                    raw = match.group(1)
+                    href = re.sub(r"\?.+$", "", raw).replace(config.img_href_ims_base, "").replace(config.img_href_ims_base_dollar, "")
+                    is_external = href.startswith("http://") or href.startswith("https://")
                     image.append({
-                        'id': str(hashlib.md5(match.group(1).replace(config.img_href_ims_base, "").encode()).hexdigest()),
-                        'href': match.group(1).replace(config.img_href_ims_base, "")
+                        'id': str(hashlib.md5(href.encode()).hexdigest()),
+                        'href': href,
+                        'is_external': is_external
                     })
                 p = re.compile('<img src="([^"]+)".*>')
                 subn_tuple = p.subn('', this_answer['text'])
